@@ -1,0 +1,618 @@
+<title>Cube Motion Rig</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#0A0C0A; --panel:#111410; --panel2:#171B15; --sunk:#0C0F0B;
+  --line:#242A22; --line-soft:#1A1F19;
+  --ink:#E4E9DF; --dim:#8C9688; --faint:#59634F;
+  --accent:#7FEE64; --accent-deep:#3E8A33; --warm:#F6F573;
+  --r:3px;
+  --mono:"Martian Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"Archivo",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:1px solid var(--accent);outline-offset:2px}
+
+.app{height:100vh;overflow:hidden;display:flex;flex-direction:column}
+header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+  padding:14px 20px;border-bottom:1px solid var(--line)}
+.wordmark{font-weight:600;font-size:14px;letter-spacing:.06em;text-transform:uppercase}
+.wordmark b{color:var(--accent);font-weight:600}
+.src{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.04em;display:flex;gap:10px;flex-wrap:wrap}
+.src span{white-space:nowrap}
+.src i{color:var(--dim);font-style:normal}
+
+main{flex:1;display:grid;grid-template-columns:224px minmax(0,1fr) 292px;min-height:0}
+.rail,.panel{background:var(--panel);display:flex;flex-direction:column;min-height:0;overflow-y:auto}
+.rail{border-right:1px solid var(--line)}
+.panel{border-left:1px solid var(--line)}
+
+.lab{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.sec{padding:14px 16px;border-bottom:1px solid var(--line-soft);display:flex;flex-direction:column;gap:11px}
+.sec:last-child{border-bottom:0}
+
+/* presets */
+.preset{display:block;width:100%;text-align:left;padding:9px 14px 10px 16px;border-left:2px solid transparent;
+  border-bottom:1px solid var(--line-soft)}
+.preset:hover{background:var(--panel2)}
+.preset[aria-pressed="true"]{background:var(--panel2);border-left-color:var(--accent)}
+.preset .nm{font-weight:500;font-size:12.5px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.preset[aria-pressed="true"] .nm{color:var(--accent)}
+.preset .kind{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase}
+.preset .ds{color:var(--dim);font-size:11.5px;line-height:1.35;margin-top:3px}
+
+/* stage */
+.stage{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--sunk)}
+.stagebar{display:flex;align-items:center;gap:14px;padding:9px 16px;border-bottom:1px solid var(--line-soft)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{padding:4px 9px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#081106}
+.readout{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--faint);display:flex;gap:12px}
+.readout i{font-style:normal;color:var(--dim)}
+.canvaswrap{flex:1;position:relative;overflow:hidden;min-height:0}
+canvas{display:block;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:2px}
+canvas.grid{background-color:#0f120e;
+  background-image:linear-gradient(45deg,#1b211a 25%,transparent 25%),linear-gradient(-45deg,#1b211a 25%,transparent 25%),
+  linear-gradient(45deg,transparent 75%,#1b211a 75%),linear-gradient(-45deg,transparent 75%,#1b211a 75%);
+  background-size:18px 18px;background-position:0 0,0 9px,9px -9px,-9px 0}
+
+/* transport */
+.transport{display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line)}
+.tbtn{width:26px;height:26px;display:grid;place-items:center;border:1px solid var(--line);border-radius:var(--r);color:var(--dim)}
+.tbtn:hover{color:var(--ink);border-color:var(--dim)}
+.tbtn.on{color:var(--accent);border-color:var(--accent-deep)}
+.tbtn svg{width:11px;height:11px;fill:currentColor}
+.scrub{flex:1;height:22px;position:relative;cursor:pointer;touch-action:none}
+.scrub .track{position:absolute;top:10px;left:0;right:0;height:2px;background:var(--line)}
+.scrub .fill{position:absolute;top:10px;left:0;height:2px;background:var(--accent-deep)}
+.scrub .head{position:absolute;top:4px;width:2px;height:14px;background:var(--accent);transform:translateX(-1px)}
+.scrub .tick{position:absolute;top:6px;width:1px;height:10px;background:var(--line)}
+.time{font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--dim);letter-spacing:.02em;min-width:96px;text-align:right}
+.time b{color:var(--ink);font-weight:500}
+
+/* controls */
+.ctl{display:flex;flex-direction:column;gap:5px}
+.ctl .row{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.ctl .val{font-family:var(--mono);font-size:10px;color:var(--ink);font-variant-numeric:tabular-nums}
+.ctl.off{opacity:.32;pointer-events:none}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:14px;background:none;cursor:ew-resize;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line)}
+input[type=range]::-moz-range-track{height:2px;background:var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;border-radius:50%;background:var(--accent);margin-top:-3.5px}
+input[type=range]::-moz-range-thumb{width:9px;height:9px;border:0;border-radius:50%;background:var(--accent)}
+select{width:100%;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);color:var(--ink);
+  padding:5px 7px;font-family:var(--mono);font-size:10px;letter-spacing:.03em}
+.chk{display:flex;align-items:center;gap:7px;cursor:pointer;font-family:var(--mono);font-size:10px;letter-spacing:.05em;color:var(--dim);text-transform:uppercase}
+.chk input{appearance:none;width:11px;height:11px;border:1px solid var(--line);border-radius:2px;background:var(--sunk);cursor:pointer}
+.chk input:checked{background:var(--accent);border-color:var(--accent)}
+.chk input:checked+span{color:var(--ink)}
+
+.xbtn{width:100%;text-align:left;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r);
+  font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);
+  display:flex;justify-content:space-between;align-items:center;gap:8px}
+.xbtn:hover{border-color:var(--dim);color:var(--ink)}
+.xbtn.rec{border-color:#8a3b3b;color:#e08585}
+.xbtn em{font-style:normal;color:var(--faint);font-size:9px}
+.note{font-size:11px;line-height:1.4;color:var(--faint)}
+.note code{font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+
+@media (max-width:1080px){
+  .app{height:auto;overflow:visible}
+  main{grid-template-columns:1fr;grid-template-areas:"stage" "rail" "panel"}
+  .stage{grid-area:stage}.rail{grid-area:rail;border-right:0;border-top:1px solid var(--line)}
+  .panel{grid-area:panel;border-left:0;border-top:1px solid var(--line)}
+  .canvaswrap{height:min(70vh,560px);flex:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <header>
+    <div class="wordmark">Cube <b>Motion</b> Rig</div>
+    <div class="src">
+      <span><i>cube.svg</i></span><span>1,724 tiles</span><span>269 shapes</span>
+      <span>6 tones</span><span>9 edges</span><span>edge 6202u</span>
+    </div>
+  </header>
+  <main>
+    <aside class="rail" id="rail"></aside>
+    <section class="stage">
+      <div class="stagebar">
+        <span class="lab">Ground</span>
+        <div class="seg" id="bgseg">
+          <button data-bg="void" aria-pressed="true">Void</button>
+          <button data-bg="paper" aria-pressed="false">Paper</button>
+          <button data-bg="grid" aria-pressed="false">Alpha</button>
+        </div>
+        <div class="readout"><span><i id="fps">60</i> fps</span><span><i id="ms">0.0</i> ms/frame</span></div>
+      </div>
+      <div class="canvaswrap" id="wrap"><canvas id="cv" aria-label="Animated cube preview" role="img"></canvas></div>
+      <div class="transport">
+        <button class="tbtn" id="play" title="Play / pause (space)"><svg viewBox="0 0 12 12" id="playicon"><path d="M3 1.5v9l7-4.5z"/></svg></button>
+        <button class="tbtn" id="rewind" title="Back to start"><svg viewBox="0 0 12 12"><path d="M2.5 1.5h1.6v9H2.5zM10 1.5v9L4.6 6z"/></svg></button>
+        <button class="tbtn on" id="loop" title="Loop"><svg viewBox="0 0 12 12"><path d="M2 4.2A3.2 3.2 0 015.2 1H9V0l3 2-3 2V3H5.2A1.2 1.2 0 004 4.2V5H2zM10 7.8A3.2 3.2 0 016.8 11H3v1L0 10l3-2v1h3.8A1.2 1.2 0 008 7.8V7h2z"/></svg></button>
+        <div class="scrub" id="scrub"><div class="track"></div><div class="fill" id="sfill"></div><div class="tick" id="stick" hidden></div><div class="head" id="shead"></div></div>
+        <div class="time"><b id="tnow">0.00</b> / <span id="tend">2.60</span>s</div>
+      </div>
+    </section>
+    <aside class="panel" id="panel"></aside>
+  </main>
+</div>
+
+<script>
+const DATA = __DATA__;
+
+/* ---------- core: shared by the app and by exported players ---------- */
+function frac(v){ return v - Math.floor(v); }
+function bump(u, w){ const d = Math.min(u, 1 - u); return d < w ? 0.5 + 0.5 * Math.cos(Math.PI * d / w) : 0; }
+function makeEases(){
+  return {
+    linear: t => t,
+    outCubic: t => 1 - Math.pow(1 - t, 3),
+    inCubic: t => t * t * t,
+    inOutCubic: t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+    outBack: t => { const c = 1.9; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); },
+    outElastic: t => t === 0 || t === 1 ? t : Math.pow(2, -9 * t) * Math.sin((t * 9 - .75) * (2 * Math.PI / 3)) + 1
+  };
+}
+function initScene(D){
+  const n = D.tiles.length, C30 = Math.cos(Math.PI / 6);
+  const S = {
+    L: D.L, cx: D.cx, cy: D.cy, n,
+    paths: D.shapes.map(d => new Path2D(d)),
+    shape: new Uint16Array(n), col: new Uint8Array(n), face: new Uint8Array(n),
+    x: new Float32Array(n), y: new Float32Array(n),
+    nx: new Float32Array(n), ny: new Float32Array(n),
+    rx: new Float32Array(n), ry: new Float32Array(n),
+    rnd: new Float32Array(n), raw: {}, rgb: [], cache: null, cacheKey: ''
+  };
+  S.rgb = D.colors.map(h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+  const NRM = [[0, -1], [-C30, .5], [C30, .5]];           // top / left / right face normals, projected
+  const O = { sx: [], sy: [], X: [], Y: [], Z: [], corner: [], topv: [], wire: [], face: [], tone: [] };
+  let seed = 20260910;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+  for (let i = 0; i < n; i++){
+    const t = D.tiles[i], x = t[0], y = t[1], f = t[4], X = t[5], Y = t[6], Z = t[7];
+    S.x[i] = x; S.y[i] = y; S.shape[i] = t[2]; S.col[i] = t[3]; S.face[i] = f;
+    S.nx[i] = NRM[f][0]; S.ny[i] = NRM[f][1];
+    const dx = x - D.cx, dy = y - D.cy, m = Math.hypot(dx, dy) || 1;
+    S.rx[i] = dx / m; S.ry[i] = dy / m; S.rnd[i] = rnd();
+    O.sx.push(dx / D.L); O.sy.push(dy / D.L);
+    O.X.push(X); O.Y.push(Y); O.Z.push(Z);
+    O.corner.push(Math.hypot(X - 1, Y - 1, Z - 1));
+    O.topv.push(Math.hypot(X, Y, Z - 1));
+    O.wire.push((t[8] + t[9]) / 9);
+    O.face.push(f + (1 - Math.hypot(X - 1, Y - 1, Z - 1) / 1.74));
+    O.tone.push(t[3] / 5);
+    if (x < minx) minx = x; if (x > maxx) maxx = x;
+    if (y < miny) miny = y; if (y > maxy) maxy = y;
+  }
+  const M = 95;
+  S.bbox = [minx - M, miny - M, maxx + M, maxy + M];
+  S.raw = O;
+  return S;
+}
+function orderValues(S, cfg){
+  const n = S.n, out = new Float32Array(n), R = S.raw;
+  let v = new Array(n);
+  if (cfg.order === 'sweep'){
+    const a = cfg.angle * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+    for (let i = 0; i < n; i++) v[i] = R.sx[i] * ca + R.sy[i] * sa;
+  } else if (cfg.order === 'random'){
+    for (let i = 0; i < n; i++) v[i] = S.rnd[i];
+  } else {
+    const src = R[cfg.order] || R.corner;
+    for (let i = 0; i < n; i++) v[i] = src[i];
+  }
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < n; i++){ if (v[i] < lo) lo = v[i]; if (v[i] > hi) hi = v[i]; }
+  const span = (hi - lo) || 1;
+  for (let i = 0; i < n; i++){
+    let o = (v[i] - lo) / span;
+    if (cfg.jitter) o += (S.rnd[(i * 7 + 3) % n] - .5) * cfg.jitter;
+    if (cfg.reverse) o = 1 - o;
+    out[i] = o < 0 ? 0 : o > 1 ? 1 : o;
+  }
+  return out;
+}
+function colorStr(S, ci, step, flash){
+  const key = flash;
+  if (S.cacheKey !== key){ S.cache = new Array(6 * 33); S.cacheKey = key; }
+  const k = ci * 33 + step, hit = S.cache[k];
+  if (hit) return hit;
+  const f = step / 32, b = S.rgb[ci];
+  const fr = parseInt(flash.slice(1, 3), 16), fg = parseInt(flash.slice(3, 5), 16), fb = parseInt(flash.slice(5, 7), 16);
+  const s = 'rgb(' + Math.round(b[0] + (fr - b[0]) * f) + ',' + Math.round(b[1] + (fg - b[1]) * f) + ',' + Math.round(b[2] + (fb - b[2]) * f) + ')';
+  S.cache[k] = s;
+  return s;
+}
+function fitView(S, w, h, pad){
+  const bw = S.bbox[2] - S.bbox[0], bh = S.bbox[3] - S.bbox[1];
+  const s = Math.min(w / bw, h / bh) * (1 - pad);
+  return { s, ox: w / 2 - (S.bbox[0] + bw / 2) * s, oy: h / 2 - (S.bbox[1] + bh / 2) * s };
+}
+function drawFrame(ctx, S, ord, cfg, t, view){
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if (cfg.bg === 'void'){ ctx.fillStyle = '#080A08'; ctx.fillRect(0, 0, W, H); }
+  else if (cfg.bg === 'paper'){ ctx.fillStyle = '#F1F0E6'; ctx.fillRect(0, 0, W, H); }
+  const E = makeEases(), ease = E[cfg.ease] || E.linear;
+  const D = cfg.duration || 1, p = Math.min(t, D) / D;
+  const build = cfg.mode === 'build', out = cfg.play === 'out';
+  const sp = cfg.spread, denom = Math.max(1e-4, 1 - sp);
+  const L = S.L, dist = (build ? cfg.dist : cfg.lift) * L;
+  const dm = cfg.dir, TAU = Math.PI / 180;
+  let prevA = -1, prevF = '';
+  for (let i = 0; i < S.n; i++){
+    const o = ord[i];
+    let amt, al, sc, rt, fl;
+    if (build){
+      let lt = (p - o * sp) / denom;
+      lt = lt < 0 ? 0 : lt > 1 ? 1 : lt;
+      let e = ease(lt);
+      if (out) e = 1 - e;
+      amt = 1 - e;
+      sc = cfg.scale0 + (1 - cfg.scale0) * e;
+      al = cfg.alpha0 + (1 - cfg.alpha0) * e;
+      rt = cfg.rot * amt * TAU;
+      fl = cfg.flash * amt;
+    } else {
+      const b = bump(frac(p * cfg.cycles - o * sp), cfg.width);
+      amt = b;
+      sc = 1 + cfg.scaleAmt * b;
+      al = 1 - cfg.dim * (1 - b);
+      rt = cfg.rot * b * TAU;
+      fl = cfg.flash * b;
+    }
+    if (al <= 0.004 || sc <= 0.004) continue;
+    let dx = 0, dy = 0;
+    if (dm !== 'none' && dist && amt){
+      if (dm === 'normal'){ dx = S.nx[i] * dist * amt; dy = S.ny[i] * dist * amt; }
+      else if (dm === 'gravity'){ dy = -dist * amt; }
+      else { dx = S.rx[i] * dist * amt; dy = S.ry[i] * dist * amt; }
+    }
+    const k = sc * view.s, cs = Math.cos(rt) * k, sn = Math.sin(rt) * k;
+    ctx.setTransform(cs, sn, -sn, cs, view.ox + (S.x[i] + dx) * view.s, view.oy + (S.y[i] + dy) * view.s);
+    const a = al > 1 ? 1 : al;
+    if (a !== prevA){ ctx.globalAlpha = a; prevA = a; }
+    const f = colorStr(S, S.col[i], fl <= 0 ? 0 : fl >= 1 ? 32 : Math.round(fl * 32), cfg.flashColor);
+    if (f !== prevF){ ctx.fillStyle = f; prevF = f; }
+    ctx.fill(S.paths[S.shape[i]]);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+}
+const CORE = [frac, bump, makeEases, initScene, orderValues, colorStr, fitView, drawFrame];
+
+/* ---------- presets ---------- */
+const BASE = {
+  mode:'pulse', play:'in', order:'corner', angle:0, reverse:false, jitter:0,
+  duration:2.6, spread:.85, ease:'outCubic', cycles:1, width:.18, hold:.5,
+  dir:'normal', dist:.35, lift:.06, scale0:.3, scaleAmt:.35, alpha0:0, dim:.35,
+  rot:0, flash:.8, flashColor:'#F6F573', bg:'void'
+};
+const PRESETS = [
+  { id:'ripple', name:'Corner ripple', kind:'pulse',
+    ds:'A pulse leaves the near corner and climbs all three edges at once.',
+    cfg:{ mode:'pulse', order:'corner', duration:2.6, spread:.85, cycles:1, width:.18, lift:.06, scaleAmt:.35, dim:.35, flash:.8 } },
+  { id:'trace', name:'Edge trace', kind:'pulse',
+    ds:'One hot cell runs the wireframe: outer ring first, then the three spokes.',
+    cfg:{ mode:'pulse', order:'wire', duration:3.2, spread:1, cycles:1, width:.05, lift:.05, scaleAmt:.5, dim:.62, flash:1, dir:'normal' } },
+  { id:'sweep', name:'Face sweep', kind:'pulse',
+    ds:'A plane crosses the cube bottom to top, in cube space, not screen space.',
+    cfg:{ mode:'pulse', order:'Z', reverse:false, duration:2.2, spread:.9, cycles:1, width:.22, lift:.08, scaleAmt:.3, dim:.2, flash:.9 } },
+  { id:'bloom', name:'Dither bloom', kind:'pulse',
+    ds:'Fires by tone. The deep greens light first, the yellow highlights last.',
+    cfg:{ mode:'pulse', order:'tone', duration:2.8, spread:.9, cycles:1, width:.3, lift:.03, scaleAmt:.45, dim:.3, flash:.55, dir:'normal' } },
+  { id:'shimmer', name:'Idle shimmer', kind:'pulse',
+    ds:'Low-amplitude twinkle. Built to loop behind a hero without pulling focus.',
+    cfg:{ mode:'pulse', order:'random', duration:4, spread:1, cycles:1, width:.12, lift:.012, scaleAmt:.16, dim:.14, flash:.3, dir:'normal' } },
+  { id:'assemble', name:'Assemble', kind:'build',
+    ds:'Tiles arrive along their own face normal and settle onto the surface.',
+    cfg:{ mode:'build', play:'in', order:'corner', duration:1.9, spread:.7, ease:'outCubic', dir:'normal', dist:.34, scale0:.25, alpha0:0, flash:.5, hold:.6 } },
+  { id:'settle', name:'Settle', kind:'build',
+    ds:'Falls in from above with a slight overshoot. Top face lands first.',
+    cfg:{ mode:'build', play:'in', order:'Z', reverse:true, duration:2.1, spread:.6, ease:'outBack', dir:'gravity', dist:.55, scale0:.85, alpha0:0, rot:8, flash:.25, hold:.7 } },
+  { id:'scatter', name:'Scatter', kind:'build',
+    ds:'The cube comes apart outward at random. Run it after a hold as an exit.',
+    cfg:{ mode:'build', play:'out', order:'random', duration:1.5, spread:.5, ease:'inCubic', dir:'radial', dist:.7, scale0:.4, alpha0:0, rot:-40, flash:.35, hold:.4 } }
+];
+
+/* ---------- param spec ---------- */
+const ORDERS = [
+  ['corner','From near corner'],['topv','From top vertex'],['wire','Along wireframe'],
+  ['Z','Cube axis Z (up)'],['X','Cube axis X (right face)'],['Y','Cube axis Y (left face)'],
+  ['face','Face by face'],['tone','By tone (dark→light)'],['sweep','Screen sweep'],['random','Random']
+];
+const EASE_OPTS = [['outCubic','Out cubic'],['outBack','Out back'],['outElastic','Out elastic'],['inOutCubic','In-out cubic'],['inCubic','In cubic'],['linear','Linear']];
+const pct = v => Math.round(v * 100) + '%';
+const SPEC = [
+  { g:'Timing', items:[
+    { k:'duration', l:'Duration', min:.3, max:8, step:.1, fmt:v => v.toFixed(1) + 's' },
+    { k:'hold', l:'Hold at end', min:0, max:2, step:.1, fmt:v => v.toFixed(1) + 's', when:c => c.mode === 'build' },
+    { k:'cycles', l:'Cycles', min:1, max:6, step:1, fmt:v => v + '×', when:c => c.mode === 'pulse' },
+    { k:'width', l:'Pulse width', min:.02, max:.5, step:.01, fmt:pct, when:c => c.mode === 'pulse' },
+    { k:'spread', l:'Stagger', min:0, max:1, step:.01, fmt:pct },
+    { k:'ease', l:'Ease', type:'select', opts:EASE_OPTS, when:c => c.mode === 'build' }
+  ]},
+  { g:'Order', items:[
+    { k:'order', l:'Order by', type:'select', opts:ORDERS },
+    { k:'angle', l:'Sweep angle', min:0, max:355, step:5, fmt:v => v + '°', when:c => c.order === 'sweep' },
+    { k:'jitter', l:'Jitter', min:0, max:1, step:.02, fmt:pct },
+    { k:'reverse', l:'Reverse order', type:'check' }
+  ]},
+  { g:'Motion', items:[
+    { k:'dir', l:'Displace along', type:'select', opts:[['normal','Face normal'],['gravity','Screen up'],['radial','Radial out'],['none','No displacement']] },
+    { k:'dist', l:'Enter distance', min:0, max:1.2, step:.01, fmt:pct, when:c => c.mode === 'build' },
+    { k:'lift', l:'Lift off surface', min:0, max:.4, step:.005, fmt:v => (v * 100).toFixed(1) + '%', when:c => c.mode === 'pulse' },
+    { k:'scale0', l:'Enter scale', min:0, max:1.6, step:.05, fmt:v => v.toFixed(2) + '×', when:c => c.mode === 'build' },
+    { k:'scaleAmt', l:'Scale at peak', min:-.6, max:1.2, step:.02, fmt:v => (v >= 0 ? '+' : '') + v.toFixed(2) + '×', when:c => c.mode === 'pulse' },
+    { k:'rot', l:'Rotate', min:-180, max:180, step:5, fmt:v => v + '°' }
+  ]},
+  { g:'Look', items:[
+    { k:'alpha0', l:'Enter opacity', min:0, max:1, step:.05, fmt:pct, when:c => c.mode === 'build' },
+    { k:'dim', l:'Dim between pulses', min:0, max:1, step:.02, fmt:pct, when:c => c.mode === 'pulse' },
+    { k:'flash', l:'Flash', min:0, max:1, step:.02, fmt:pct },
+    { k:'flashColor', l:'Flash tone', type:'select', opts:[['#F6F573','Highlight yellow'],['#FFFFFF','White'],['#C9FFB4','Pale lime'],['#124D11','Deep green']] }
+  ]}
+];
+
+/* ---------- state ---------- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const S = initScene(DATA);
+let cfg = Object.assign({}, BASE, PRESETS[0].cfg);
+let ord = orderValues(S, cfg);
+let view = { s:1, ox:0, oy:0 };
+let t = 0, playing = true, looping = true, lastNow = 0, activePreset = PRESETS[0].id;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (reduce) playing = false;
+
+const cycleLen = () => cfg.duration + (cfg.mode === 'build' && looping ? cfg.hold : 0);
+
+/* ---------- canvas sizing ---------- */
+const wrap = document.getElementById('wrap');
+function resize(){
+  const r = wrap.getBoundingClientRect(), pad = 36;
+  const side = Math.max(200, Math.min(r.width - pad, r.height - pad));
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  cv.style.width = side + 'px'; cv.style.height = side + 'px';
+  cv.width = Math.round(side * dpr); cv.height = Math.round(side * dpr);
+  view = fitView(S, cv.width, cv.height, .08);
+  S.cacheKey = '';
+  draw();
+}
+new ResizeObserver(resize).observe(wrap);
+
+/* ---------- render loop ---------- */
+let fpsAcc = 0, fpsN = 0, msAcc = 0;
+const fpsEl = document.getElementById('fps'), msEl = document.getElementById('ms');
+function draw(){ drawFrame(ctx, S, ord, cfg, t, view); }
+function tick(now){
+  const dt = lastNow ? Math.min(.1, (now - lastNow) / 1000) : 0;
+  lastNow = now;
+  if (playing){
+    t += dt;
+    const len = cycleLen();
+    if (t >= len){ if (looping) t = t % len; else { t = cfg.duration; setPlaying(false); } }
+  }
+  const t0 = performance.now();
+  draw();
+  msAcc += performance.now() - t0; fpsAcc += dt; fpsN++;
+  if (fpsN >= 30){
+    fpsEl.textContent = fpsAcc > 0 ? Math.round(fpsN / fpsAcc) : 60;
+    msEl.textContent = (msAcc / fpsN).toFixed(1);
+    fpsAcc = 0; fpsN = 0; msAcc = 0;
+  }
+  updateTransport();
+  requestAnimationFrame(tick);
+}
+
+/* ---------- transport ---------- */
+const sfill = document.getElementById('sfill'), shead = document.getElementById('shead'),
+      stick = document.getElementById('stick'), tnow = document.getElementById('tnow'),
+      tend = document.getElementById('tend'), scrub = document.getElementById('scrub'),
+      playicon = document.getElementById('playicon');
+function updateTransport(){
+  const len = cycleLen(), f = Math.min(1, t / len) * 100;
+  sfill.style.width = f + '%'; shead.style.left = f + '%';
+  tnow.textContent = t.toFixed(2); tend.textContent = len.toFixed(2);
+  if (cfg.mode === 'build' && looping && cfg.hold > 0){
+    stick.hidden = false; stick.style.left = (cfg.duration / len * 100) + '%';
+  } else stick.hidden = true;
+}
+function setPlaying(v){
+  playing = v;
+  playicon.innerHTML = v ? '<path d="M3 1.5h2.6v9H3zM6.9 1.5h2.6v9H6.9z"/>' : '<path d="M3 1.5v9l7-4.5z"/>';
+}
+setPlaying(playing);
+document.getElementById('play').onclick = () => setPlaying(!playing);
+document.getElementById('rewind').onclick = () => { t = 0; draw(); };
+const loopBtn = document.getElementById('loop');
+loopBtn.onclick = () => { looping = !looping; loopBtn.classList.toggle('on', looping); };
+let scrubbing = false;
+const scrubTo = e => {
+  const r = scrub.getBoundingClientRect();
+  t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * cycleLen();
+  draw(); updateTransport();
+};
+scrub.addEventListener('pointerdown', e => { scrubbing = true; scrub.setPointerCapture(e.pointerId); setPlaying(false); scrubTo(e); });
+scrub.addEventListener('pointermove', e => { if (scrubbing) scrubTo(e); });
+scrub.addEventListener('pointerup', e => { scrubbing = false; });
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.code === 'Space'){ e.preventDefault(); setPlaying(!playing); }
+  if (e.code === 'KeyR'){ t = 0; draw(); }
+});
+
+/* ---------- preset rail ---------- */
+const rail = document.getElementById('rail');
+function buildRail(){
+  rail.innerHTML = '<div class="sec"><span class="lab">Presets</span></div>';
+  PRESETS.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'preset'; b.setAttribute('aria-pressed', String(p.id === activePreset));
+    b.innerHTML = '<span class="nm">' + p.name + '<span class="kind">' + p.kind + '</span></span><span class="ds">' + p.ds + '</span>';
+    b.onclick = () => {
+      activePreset = p.id;
+      const bg = cfg.bg;
+      cfg = Object.assign({}, BASE, p.cfg, { bg });
+      ord = orderValues(S, cfg); t = 0; setPlaying(!reduce);
+      buildRail(); buildPanel(); draw();
+    };
+    rail.appendChild(b);
+  });
+}
+
+/* ---------- parameter panel ---------- */
+const panel = document.getElementById('panel');
+function ctlRow(item){
+  const wrapEl = document.createElement('div');
+  wrapEl.className = 'ctl' + (item.when && !item.when(cfg) ? ' off' : '');
+  const row = document.createElement('div'); row.className = 'row';
+  const lab = document.createElement('span'); lab.className = 'lab'; lab.textContent = item.l;
+  row.appendChild(lab);
+  if (item.type === 'select'){
+    wrapEl.appendChild(row);
+    const sel = document.createElement('select');
+    item.opts.forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); });
+    sel.value = cfg[item.k];
+    sel.onchange = () => { cfg[item.k] = sel.value; if (item.k === 'order') ord = orderValues(S, cfg); S.cacheKey = ''; buildPanel(); draw(); };
+    wrapEl.appendChild(sel);
+  } else if (item.type === 'check'){
+    const l = document.createElement('label'); l.className = 'chk';
+    const inp = document.createElement('input'); inp.type = 'checkbox'; inp.checked = !!cfg[item.k];
+    const sp = document.createElement('span'); sp.textContent = item.l;
+    inp.onchange = () => { cfg[item.k] = inp.checked; ord = orderValues(S, cfg); draw(); };
+    l.append(inp, sp); wrapEl.appendChild(l);
+  } else {
+    const val = document.createElement('span'); val.className = 'val'; val.textContent = item.fmt(cfg[item.k]);
+    row.appendChild(val); wrapEl.appendChild(row);
+    const inp = document.createElement('input');
+    inp.type = 'range'; inp.min = item.min; inp.max = item.max; inp.step = item.step; inp.value = cfg[item.k];
+    inp.oninput = () => {
+      cfg[item.k] = parseFloat(inp.value); val.textContent = item.fmt(cfg[item.k]);
+      if (item.k === 'angle' || item.k === 'jitter') ord = orderValues(S, cfg);
+      draw(); updateTransport();
+    };
+    wrapEl.appendChild(inp);
+  }
+  return wrapEl;
+}
+function segRow(label, key, opts){
+  const sec = document.createElement('div'); sec.className = 'ctl';
+  const row = document.createElement('div'); row.className = 'row';
+  const lab = document.createElement('span'); lab.className = 'lab'; lab.textContent = label;
+  row.appendChild(lab); sec.appendChild(row);
+  const seg = document.createElement('div'); seg.className = 'seg';
+  opts.forEach(([v, l]) => {
+    const b = document.createElement('button');
+    b.textContent = l; b.setAttribute('aria-pressed', String(cfg[key] === v));
+    b.onclick = () => { cfg[key] = v; t = 0; buildPanel(); draw(); };
+    seg.appendChild(b);
+  });
+  sec.appendChild(seg);
+  return sec;
+}
+function buildPanel(){
+  panel.innerHTML = '';
+  const head = document.createElement('div'); head.className = 'sec';
+  head.appendChild(segRow('Mode', 'mode', [['pulse','Pulse'],['build','Build']]));
+  if (cfg.mode === 'build') head.appendChild(segRow('Play', 'play', [['in','In'],['out','Out']]));
+  panel.appendChild(head);
+  SPEC.forEach(group => {
+    const sec = document.createElement('div'); sec.className = 'sec';
+    const h = document.createElement('span'); h.className = 'lab'; h.style.color = 'var(--dim)'; h.textContent = group.g;
+    sec.appendChild(h);
+    group.items.forEach(it => sec.appendChild(ctlRow(it)));
+    panel.appendChild(sec);
+  });
+  panel.appendChild(exportSection());
+  updateExportNote();
+}
+
+/* ---------- export ---------- */
+let saver = null, saveState = location.protocol === 'file:' ? 'local' : 'blocked';
+if (window.claude && claude.use) claude.use('downloads').then(d => {
+  if (d){ saver = d; saveState = 'granted'; updateExportNote(); }
+}).catch(() => {});
+function dl(blob, name){
+  if (saver){
+    saver.save({ filename:name, data:blob }).catch(e => {
+      if (e && e.code !== 'declined') updateExportNote('Save failed: ' + ((e && e.code) || 'unknown') + '.');
+    });
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function updateExportNote(msg){
+  const n = document.getElementById('xnote'); if (!n) return;
+  n.innerHTML = msg ? msg
+    : saveState === 'local' ? 'WebM carries no alpha \u2014 record on <b>Void</b> or <b>Paper</b>, or export the player and screen-record it over your own ground.'
+    : saveState === 'granted' ? 'Every save asks you to confirm the file first. WebM carries no alpha, so record on <b>Void</b> or <b>Paper</b>.'
+    : 'Downloads are blocked in this view. Open <code>cube-motion.html</code> from disk to record video or save frames.';
+}
+function playerHTML(){
+  const body = CORE.map(f => f.toString()).join('\n');
+  return '<!doctype html><meta charset="utf-8"><title>Cube ' + activePreset + '</title>' +
+    '<style>html,body{margin:0;height:100%;background:' + (cfg.bg === 'paper' ? '#F1F0E6' : cfg.bg === 'void' ? '#080A08' : 'transparent') +
+    '}canvas{display:block;width:100%;height:100%}</style><canvas id=c></canvas><script>\n' +
+    'const DATA=' + JSON.stringify(DATA) + ';const CFG=' + JSON.stringify(cfg) + ';\n' + body + '\n' +
+    'const c=document.getElementById("c"),x=c.getContext("2d"),S=initScene(DATA),O=orderValues(S,CFG);let V,t=0,p=0;\n' +
+    'function rs(){const d=Math.min(2,devicePixelRatio||1);c.width=innerWidth*d;c.height=innerHeight*d;V=fitView(S,c.width,c.height,.08);S.cacheKey="";}\n' +
+    'addEventListener("resize",rs);rs();const LEN=CFG.duration+(CFG.mode==="build"?CFG.hold:0);\n' +
+    'function f(n){if(p)t+=Math.min(.1,(n-p)/1000);p=n;if(t>=LEN)t%=LEN;drawFrame(x,S,O,CFG,t,V);requestAnimationFrame(f)}requestAnimationFrame(f);\n' +
+    '<\/script>';
+}
+function exportSection(){
+  const sec = document.createElement('div'); sec.className = 'sec';
+  const h = document.createElement('span'); h.className = 'lab'; h.style.color = 'var(--dim)'; h.textContent = 'Export';
+  sec.appendChild(h);
+  const mk = (label, hint, fn, cls) => {
+    const b = document.createElement('button'); b.className = 'xbtn' + (cls ? ' ' + cls : '');
+    b.innerHTML = '<span>' + label + '</span><em>' + hint + '</em>';
+    b.onclick = () => fn(b); sec.appendChild(b); return b;
+  };
+  const types = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'];
+  const mime = types.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
+  mk('Record loop', mime ? cycleLen().toFixed(1) + 's · ' + cv.width + 'px' : 'unsupported', b => {
+    if (!mime) return;
+    const stream = cv.captureStream(60), rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12e6 });
+    const chunks = [];
+    rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+    rec.onstop = () => { dl(new Blob(chunks, { type: mime }), 'cube-' + activePreset + (mime.includes('mp4') ? '.mp4' : '.webm')); b.classList.remove('rec'); buildPanel(); };
+    t = 0; setPlaying(true); b.classList.add('rec'); b.querySelector('em').textContent = 'recording…';
+    rec.start();
+    setTimeout(() => rec.stop(), cycleLen() * 1000 + 120);
+  });
+  mk('Save frame', 'png · ' + cv.width + 'px', () => cv.toBlob(bl => dl(bl, 'cube-' + activePreset + '-' + t.toFixed(2) + 's.png')));
+  mk('Export player', 'self-contained html', () => dl(new Blob([playerHTML()], { type:'text/html' }), 'cube-' + activePreset + '.html'));
+  mk('Copy settings', 'json', b => {
+    navigator.clipboard.writeText(JSON.stringify(cfg, null, 2)).then(() => {
+      b.querySelector('em').textContent = 'copied'; setTimeout(() => b.querySelector('em').textContent = 'json', 1200);
+    });
+  });
+  const n = document.createElement('p'); n.className = 'note'; n.id = 'xnote';
+  sec.appendChild(n);
+  return sec;
+}
+
+/* ---------- ground switch ---------- */
+document.getElementById('bgseg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  cfg.bg = b.dataset.bg;
+  [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  cv.classList.toggle('grid', cfg.bg === 'grid');
+  draw();
+});
+
+buildRail(); buildPanel(); resize(); requestAnimationFrame(tick);
+</script>
